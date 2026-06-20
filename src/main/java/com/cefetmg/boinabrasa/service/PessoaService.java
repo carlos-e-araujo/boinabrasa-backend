@@ -4,8 +4,11 @@ import com.cefetmg.boinabrasa.dto.PessoaRequestDTO;
 import com.cefetmg.boinabrasa.dto.PessoaResponseDTO;
 import com.cefetmg.boinabrasa.entity.Pessoa;
 import com.cefetmg.boinabrasa.repository.PessoaRepository;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,12 +26,11 @@ public class PessoaService {
         List<Pessoa> pessoas = pessoaRepository.findAll();
         return pessoas.stream()
                 .map(p -> new PessoaResponseDTO(
-                    p.getId(), 
-                    p.getNome(), 
-                    p.getEmail(), 
-                    p.getCpfCnpj(), 
-                    p.getTipo()
-                ))
+                        p.getId(),
+                        p.getNome(),
+                        p.getEmail(),
+                        p.getCpfCnpj(),
+                        p.getTipo()))
                 .collect(Collectors.toList());
     }
 
@@ -41,14 +43,15 @@ public class PessoaService {
         pessoa.setTipo(request.getTipo());
 
         Pessoa p = pessoaRepository.save(pessoa);
-        
+
         return new PessoaResponseDTO(p.getId(), p.getNome(), p.getEmail(), p.getCpfCnpj(), p.getTipo());
     }
 
     @Transactional
     public PessoaResponseDTO alterar(Long id, PessoaRequestDTO request) {
         Pessoa pessoaExistente = pessoaRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Pessoa não encontrada com o ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Pessoa não encontrada com o ID: " + id));
 
         pessoaExistente.setNome(request.getNome());
         pessoaExistente.setEmail(request.getEmail());
@@ -56,14 +59,15 @@ public class PessoaService {
         pessoaExistente.setTipo(request.getTipo());
 
         Pessoa p = pessoaRepository.save(pessoaExistente);
-        
+
         return new PessoaResponseDTO(p.getId(), p.getNome(), p.getEmail(), p.getCpfCnpj(), p.getTipo());
     }
 
     @Transactional
     public void excluir(Long id) {
         if (!pessoaRepository.existsById(id)) {
-            throw new RuntimeException("Não é possível excluir. Pessoa não encontrada com o ID: " + id);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Não é possível excluir. Pessoa não encontrada com o ID: " + id);
         }
         pessoaRepository.deleteById(id);
     }
