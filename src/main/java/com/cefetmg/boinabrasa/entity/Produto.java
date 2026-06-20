@@ -17,7 +17,7 @@ public class Produto {
     private String descricao;
 
     @Column(nullable = false)
-    private BigDecimal valor;
+    private BigDecimal valorUni;
 
     @Column(nullable = false)
     private String unidade;

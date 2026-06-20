@@ -25,7 +25,7 @@ public class ProdutoService {
                 .map(p -> new ProdutoResponseDTO(
                     p.getId(), 
                     p.getDescricao(), 
-                    p.getValor(), 
+                    p.getValorUni(), 
                     p.getUnidade(), 
                     p.getQuantidadeEstoque(), 
                     p.getControleEstoque()
@@ -37,14 +37,14 @@ public class ProdutoService {
     public ProdutoResponseDTO criar(ProdutoRequestDTO request) {
         Produto produto = new Produto();
         produto.setDescricao(request.getDescricao());
-        produto.setValor(request.getValor());
+        produto.setValorUni(request.getValor());
         produto.setUnidade(request.getUnidade());
         produto.setQuantidadeEstoque(request.getQuantidadeEstoque());
         produto.setControleEstoque(request.getControleEstoque());
 
         Produto p = produtoRepository.save(produto);
         
-        return new ProdutoResponseDTO(p.getId(), p.getDescricao(), p.getValor(), p.getUnidade(), p.getQuantidadeEstoque(), p.getControleEstoque());
+        return new ProdutoResponseDTO(p.getId(), p.getDescricao(), p.getValorUni(), p.getUnidade(), p.getQuantidadeEstoque(), p.getControleEstoque());
     }
 
     @Transactional
@@ -53,14 +53,14 @@ public class ProdutoService {
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado com o ID: " + id));
 
         produtoExistente.setDescricao(request.getDescricao());
-        produtoExistente.setValor(request.getValor());
+        produtoExistente.setValorUni(request.getValor());
         produtoExistente.setUnidade(request.getUnidade());
         produtoExistente.setQuantidadeEstoque(request.getQuantidadeEstoque());
         produtoExistente.setControleEstoque(request.getControleEstoque());
 
         Produto p = produtoRepository.save(produtoExistente);
         
-        return new ProdutoResponseDTO(p.getId(), p.getDescricao(), p.getValor(), p.getUnidade(), p.getQuantidadeEstoque(), p.getControleEstoque());
+        return new ProdutoResponseDTO(p.getId(), p.getDescricao(), p.getValorUni(), p.getUnidade(), p.getQuantidadeEstoque(), p.getControleEstoque());
     }
 
     @Transactional

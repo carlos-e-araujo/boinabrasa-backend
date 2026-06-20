@@ -15,10 +15,10 @@ public class Pessoa {
     @Column(nullable = false)
     private String nome;
 
-    @Column(nullable = false, unique = true) // unique garante que não existam emails repetidos
+    @Column(nullable = false, unique = true) 
     private String email;
 
-    @Column(name = "cpf_cnpj", nullable = false, unique = true) // Mapeia o padrão snake_case do banco
+    @Column(name = "cpf_cnpj", nullable = false, unique = true) 
     private String cpfCnpj;
 
     @Enumerated(EnumType.STRING)
