@@ -1,17 +1,15 @@
 package com.cefetmg.boinabrasa.service;
 
-import com.cefetmg.boinabrasa.dto.CompraRequestDTO;
-import com.cefetmg.boinabrasa.dto.CompraResponseDTO;
-import com.cefetmg.boinabrasa.entity.Compra;
-import com.cefetmg.boinabrasa.entity.Pessoa;
-import com.cefetmg.boinabrasa.repository.CompraRepository;
-import com.cefetmg.boinabrasa.repository.PessoaRepository;
-
+import com.cefetmg.boinabrasa.dto.*;
+import com.cefetmg.boinabrasa.entity.*;
+import com.cefetmg.boinabrasa.repository.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,21 +18,40 @@ public class CompraService {
 
     private final CompraRepository compraRepository;
     private final PessoaRepository pessoaRepository;
+    private final ProdutoRepository produtoRepository;
 
-    public CompraService(CompraRepository compraRepository, PessoaRepository pessoaRepository) {
+    public CompraService(
+            CompraRepository compraRepository,
+            PessoaRepository pessoaRepository,
+            ProdutoRepository produtoRepository) {
         this.compraRepository = compraRepository;
         this.pessoaRepository = pessoaRepository;
+        this.produtoRepository = produtoRepository;
     }
 
     public List<CompraResponseDTO> listarTodos() {
         List<Compra> compras = compraRepository.findAll();
+
         return compras.stream()
-                .map(c -> new CompraResponseDTO(
-                        c.getId(),
-                        c.getDataCompra(),
-                        c.getValorCompra(),
-                        c.getFornecedor().getNome()))
+                .map(this::paraResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    private CompraResponseDTO paraResponseDTO(Compra c) {
+        List<CompraProdutoResponseDTO> itens = new ArrayList<>();
+        for (CompraProduto item : c.getItens()) {
+            itens.add(new CompraProdutoResponseDTO(
+                    item.getProduto().getId(),
+                    item.getProduto().getDescricao(),
+                    item.getQuantidade(),
+                    item.getValor()));
+        }
+        return new CompraResponseDTO(
+                c.getId(),
+                c.getDataCompra(),
+                c.getValorCompra(),
+                c.getFornecedor().getNome(),
+                itens);
     }
 
     @Transactional
@@ -45,12 +62,37 @@ public class CompraService {
 
         Compra compra = new Compra();
         compra.setDataCompra(request.getDataCompra());
-        compra.setValorCompra(request.getValorCompra());
         compra.setFornecedor(fornecedor);
 
-        Compra c = compraRepository.save(compra);
+        BigDecimal valorTotal = BigDecimal.ZERO;
 
-        return new CompraResponseDTO(c.getId(), c.getDataCompra(), c.getValorCompra(), c.getFornecedor().getNome());
+        for (CompraProdutoRequestDTO itemReq : request.getItens()) {
+            Produto produto = produtoRepository.findById(itemReq.getIdProduto())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Produto não encontrado com o ID: " + itemReq.getIdProduto()));
+
+            CompraProduto item = new CompraProduto();
+            item.setCompra(compra);
+            item.setProduto(produto);
+            item.setQuantidade(itemReq.getQuantidade());
+            item.setValor(itemReq.getValor());
+
+            compra.getItens().add(item);
+
+            BigDecimal subtotal = item.getValor().multiply(item.getQuantidade());
+            valorTotal = valorTotal.add(subtotal);
+
+            if (Boolean.TRUE.equals(produto.getControleEstoque())) {
+                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque() + item.getQuantidade().intValue());
+                produtoRepository.save(produto);
+            }
+        }
+
+        compra.setValorCompra(valorTotal);
+
+        Compra salva = compraRepository.save(compra);
+
+        return paraResponseDTO(salva);
     }
 
     @Transactional
@@ -60,24 +102,32 @@ public class CompraService {
                         "Compra não encontrada com o ID: " + id));
 
         Pessoa fornecedor = pessoaRepository.findById(request.getIdFornecedor())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
                         "Fornecedor não encontrado com o ID: " + request.getIdFornecedor()));
 
         compraExistente.setDataCompra(request.getDataCompra());
-        compraExistente.setValorCompra(request.getValorCompra());
         compraExistente.setFornecedor(fornecedor);
 
         Compra c = compraRepository.save(compraExistente);
 
-        return new CompraResponseDTO(c.getId(), c.getDataCompra(), c.getValorCompra(), c.getFornecedor().getNome());
+        return paraResponseDTO(c);
     }
 
     @Transactional
     public void excluir(Long id) {
-        if (!compraRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Não é possível excluir. Compra não encontrada com o ID: " + id);
+        Compra compra = compraRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Não é possível excluir. Compra não encontrada com o ID: " + id));
+
+        for (CompraProduto item : compra.getItens()) {
+            Produto produto = item.getProduto();
+            if (Boolean.TRUE.equals(produto.getControleEstoque())) {
+                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque() - item.getQuantidade().intValue());
+                produtoRepository.save(produto);
+            }
         }
+
         compraRepository.deleteById(id);
     }
 }
