@@ -106,8 +106,45 @@ public class CompraService {
                         HttpStatus.NOT_FOUND,
                         "Fornecedor não encontrado com o ID: " + request.getIdFornecedor()));
 
+        for (CompraProduto itemAntigo : compraExistente.getItens()) {
+            Produto produtoAntigo = itemAntigo.getProduto();
+            if (Boolean.TRUE.equals(produtoAntigo.getControleEstoque())) {
+                produtoAntigo.setQuantidadeEstoque(
+                        produtoAntigo.getQuantidadeEstoque() - itemAntigo.getQuantidade().intValue());
+                produtoRepository.save(produtoAntigo);
+            }
+        }
+
+        compraExistente.getItens().clear();
+
         compraExistente.setDataCompra(request.getDataCompra());
         compraExistente.setFornecedor(fornecedor);
+
+        BigDecimal valorTotal = BigDecimal.ZERO;
+
+        for (CompraProdutoRequestDTO itemReq : request.getItens()) {
+            Produto produto = produtoRepository.findById(itemReq.getIdProduto())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Produto não encontrado com o ID: " + itemReq.getIdProduto()));
+
+            CompraProduto item = new CompraProduto();
+            item.setCompra(compraExistente);
+            item.setProduto(produto);
+            item.setQuantidade(itemReq.getQuantidade());
+            item.setValor(itemReq.getValor());
+
+            compraExistente.getItens().add(item);
+
+            BigDecimal subtotal = item.getValor().multiply(item.getQuantidade());
+            valorTotal = valorTotal.add(subtotal);
+
+            if (Boolean.TRUE.equals(produto.getControleEstoque())) {
+                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque() + item.getQuantidade().intValue());
+                produtoRepository.save(produto);
+            }
+        }
+
+        compraExistente.setValorCompra(valorTotal);
 
         Compra c = compraRepository.save(compraExistente);
 
