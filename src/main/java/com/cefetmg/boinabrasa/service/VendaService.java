@@ -26,43 +26,37 @@ public class VendaService {
     private final PessoaRepository pessoaRepository;
     private final ProdutoRepository produtoRepository;
 
-    public VendaService(VendaRepository vendaRepository,
-                         PessoaRepository pessoaRepository,
-                         ProdutoRepository produtoRepository) {
+    public VendaService(VendaRepository vendaRepository, PessoaRepository pessoaRepository, ProdutoRepository produtoRepository) {
         this.vendaRepository = vendaRepository;
         this.pessoaRepository = pessoaRepository;
         this.produtoRepository = produtoRepository;
     }
 
+    // lista as vendas  
     public List<VendaResponseDTO> listarTodos() {
         List<Venda> vendas = vendaRepository.findAll();
-
         List<VendaResponseDTO> resultado = new ArrayList<>();
-        for (Venda venda : vendas) {
+        
+        // percorre os registros      
+        for (int i = 0; i < vendas.size(); i++) {
+            Venda venda = vendas.get(i);
             resultado.add(paraResponseDTO(venda));
         }
-
         return resultado;
     }
 
+    // busca uma unica venda pelo id 
     public VendaResponseDTO buscarPorId(Long id) {
         Venda venda = vendaRepository.findById(id).orElse(null);
-
-        if (venda == null) {
-            throw new RuntimeException("Venda não encontrada com o ID: " + id);
-        }
-
+        if (venda == null) throw new RuntimeException("Venda não encontrada");
         return paraResponseDTO(venda);
     }
 
-    // se falhar no meio desfaz tudo que ja foi gravado por conta do transactional (igual operacao de banco, faz ou nao faz)
+    // registra um novo cupom de venda      
     @Transactional
     public VendaResponseDTO criar(VendaRequestDTO request) {
         Pessoa pessoa = pessoaRepository.findById(request.getIdPessoa()).orElse(null);
-
-        if (pessoa == null) {
-            throw new RuntimeException("Pessoa não encontrada com o ID: " + request.getIdPessoa());
-        }
+        if (pessoa == null) throw new RuntimeException("Pessoa não encontrada");
 
         Venda venda = new Venda();
         venda.setData(LocalDateTime.now());
@@ -70,91 +64,86 @@ public class VendaService {
 
         BigDecimal valorTotal = BigDecimal.ZERO;
 
-        for (VendaProdutoRequestDTO itemRequest : request.getItens()) {
-
+        // loops tradicionais para processar cada item do pedido
+        for (int i = 0; i < request.getItens().size(); i++) {
+            VendaProdutoRequestDTO itemRequest = request.getItens().get(i);
             Produto produto = produtoRepository.findById(itemRequest.getIdProduto()).orElse(null);
+            if (produto == null) throw new RuntimeException("Produto não encontrado");
 
-            if (produto == null) {
-                throw new RuntimeException("Produto não encontrado com o ID: " + itemRequest.getIdProduto());
+            // trava seguranca impedindo fracionamento de peca ou un
+            String un = produto.getUnidade().toLowerCase();
+            if (("un".equals(un) || "peça".equals(un) || "pc".equals(un)) 
+                    && itemRequest.getQuantidade().remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0) {
+                throw new RuntimeException("Produtos vendidos por unidade ou peca não aceitam quantidades fracionadas");
             }
 
-            // so valida estoque se controleEstoque = true (unidade)
-            // produto por kg nao tem saldo de unidade pra checar
-            if (Boolean.TRUE.equals(produto.getControleEstoque())
-                    && produto.getQuantidadeEstoque() < itemRequest.getQuantidade().intValue()) {
-                throw new RuntimeException(
-                        "Estoque insuficiente para o produto '" + produto.getDescricao() +
-                        "'. Disponível: " + produto.getQuantidadeEstoque() +
-                        ", solicitado: " + itemRequest.getQuantidade());
+            // comparacao de estoque suficiente  
+            if (Boolean.TRUE.equals(produto.getControleEstoque()) 
+                    && produto.getQuantidadeEstoque().compareTo(itemRequest.getQuantidade()) < 0) {
+                throw new RuntimeException("Estoque insuficiente para o produto '" + produto.getDescricao() + "'.");
             }
 
-            // preco travado no momento da venda não pega o preço atual depois
             VendaProduto item = new VendaProduto();
             item.setVenda(venda);
             item.setProduto(produto);
             item.setQuantidade(itemRequest.getQuantidade());
             item.setValor(produto.getValorUni());
-
             venda.getItens().add(item);
 
             BigDecimal subtotal = produto.getValorUni().multiply(itemRequest.getQuantidade());
             valorTotal = valorTotal.add(subtotal);
 
-            // Baixa de estoque so pra produto por unidade
             if (Boolean.TRUE.equals(produto.getControleEstoque())) {
-                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque() - itemRequest.getQuantidade().intValue());
+                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque().subtract(itemRequest.getQuantidade()));
                 produtoRepository.save(produto);
             }
         }
 
         venda.setValorTotal(valorTotal);
-
-        // cascade = ALL na Entity salva os itens junto sem precisar de save() separado
         Venda vendaSalva = vendaRepository.save(venda);
-
         return paraResponseDTO(vendaSalva);
     }
 
+    // remove o registro do cupom e realiza o estorno das quantidades vendidas
     @Transactional
     public void excluir(Long id) {
         Venda venda = vendaRepository.findById(id).orElse(null);
+        if (venda == null) throw new RuntimeException("Venda não encontrada");
 
-        if (venda == null) {
-            throw new RuntimeException("Não é possível excluir. Venda não encontrada com o ID: " + id);
-        }
-
-        // devolve estoque so dos produtos por unidade
-        for (VendaProduto item : venda.getItens()) {
+        // estorno de estoque    
+        for (int i = 0; i < venda.getItens().size(); i++) {
+            VendaProduto item = venda.getItens().get(i);
             Produto produto = item.getProduto();
             if (Boolean.TRUE.equals(produto.getControleEstoque())) {
-                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque() + item.getQuantidade().intValue());
+                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque().add(item.getQuantidade()));
                 produtoRepository.save(produto);
             }
         }
-
         vendaRepository.deleteById(id);
     }
 
-    // metodo privado para tipo traduzir para DTO
+    // converte entidade para dto 
     private VendaResponseDTO paraResponseDTO(Venda venda) {
         List<VendaProdutoResponseDTO> itensDTO = new ArrayList<>();
-
-        for (VendaProduto item : venda.getItens()) {
-            VendaProdutoResponseDTO dto = new VendaProdutoResponseDTO(
-                    item.getProduto().getId(),
-                    item.getProduto().getDescricao(),
-                    item.getQuantidade(),
-                    item.getValor()
+        
+        for (int i = 0; i < venda.getItens().size(); i++) {
+            VendaProduto item = venda.getItens().get(i);
+            VendaProdutoResponseDTO itemDTO = new VendaProdutoResponseDTO(
+                item.getProduto().getId(), 
+                item.getProduto().getDescricao(), 
+                item.getQuantidade(), 
+                item.getValor()
             );
-            itensDTO.add(dto);
+            itensDTO.add(itemDTO);
         }
+        
         return new VendaResponseDTO(
-                venda.getId(),
-                venda.getData(),
-                venda.getValorTotal(),
-                venda.getPessoa().getId(),
-                venda.getPessoa().getNome(),
-                itensDTO
+            venda.getId(), 
+            venda.getData(), 
+            venda.getValorTotal(), 
+            venda.getPessoa().getId(), 
+            venda.getPessoa().getNome(), 
+            itensDTO
         );
     }
 }

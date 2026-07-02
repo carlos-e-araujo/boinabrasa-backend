@@ -22,12 +22,12 @@ public class Produto {
     @Column(nullable = false)
     private String unidade;
 
-    @Column(nullable = false)
-    private Integer quantidadeEstoque;
+    @Column(nullable = false, precision = 10, scale = 3)
+    private BigDecimal quantidadeEstoque;
 
     @Column(nullable = false)
     private Boolean controleEstoque;
 
     @Column(nullable = false)
-    private Boolean ativo = true; // tdo produto nasce ativo por padrao 
+    private Boolean ativo = true; 
 }

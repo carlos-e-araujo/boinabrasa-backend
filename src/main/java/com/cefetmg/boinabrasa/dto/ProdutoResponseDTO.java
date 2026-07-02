@@ -13,7 +13,7 @@ public class ProdutoResponseDTO {
     private String descricao;
     private BigDecimal valor;
     private String unidade;
-    private Integer quantidadeEstoque;
+    private BigDecimal quantidadeEstoque;
     private Boolean controleEstoque;
-    private Boolean ativo; // isso aq e novo
+    private Boolean ativo; 
 }

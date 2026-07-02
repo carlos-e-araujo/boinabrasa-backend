@@ -7,8 +7,9 @@ import com.cefetmg.boinabrasa.repository.ProdutoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ProdutoService {
@@ -19,21 +20,30 @@ public class ProdutoService {
         this.produtoRepository = produtoRepository;
     }
 
+    // lista os registros  
     public List<ProdutoResponseDTO> listarTodos() {
         List<Produto> produtos = produtoRepository.findAll();
-        return produtos.stream()
-                // filtra para listar apenas quem esta ativo
-                .filter(Produto::getAtivo)
-                .map(p -> new ProdutoResponseDTO(
+        List<ProdutoResponseDTO> resposta = new ArrayList<>();
+
+        // percorre a lista bruta e filtra manualmente os registros ativos
+        for (int i = 0; i < produtos.size(); i++) {
+            Produto p = produtos.get(i);
+            
+            if (p.getAtivo() != null && p.getAtivo()) {
+                ProdutoResponseDTO dto = new ProdutoResponseDTO(
                         p.getId(),
                         p.getDescricao(),
                         p.getValorUni(),
                         p.getUnidade(),
                         p.getQuantidadeEstoque(),
                         p.getControleEstoque(),
-                        p.getAtivo() 
-                ))
-                .collect(Collectors.toList());
+                        p.getAtivo()
+                );
+                resposta.add(dto);
+            }
+        }
+
+        return resposta;
     }
 
     @Transactional
@@ -42,7 +52,9 @@ public class ProdutoService {
         produto.setDescricao(request.getDescricao());
         produto.setValorUni(request.getValor());
         produto.setUnidade(request.getUnidade());
-        produto.setQuantidadeEstoque(request.getQuantidadeEstoque());
+        
+        // o estoque inicial de um novo produto para zero 
+        produto.setQuantidadeEstoque(BigDecimal.ZERO);
         produto.setControleEstoque(request.getControleEstoque());
 
         Produto p = produtoRepository.save(produto);
@@ -51,6 +63,7 @@ public class ProdutoService {
                 p.getQuantidadeEstoque(), p.getControleEstoque(), true);
     }
 
+    // funcao para alterar
     @Transactional
     public ProdutoResponseDTO alterar(Long id, ProdutoRequestDTO request) {
         Produto produtoExistente = produtoRepository.findById(id)
@@ -73,7 +86,7 @@ public class ProdutoService {
         Produto produto = produtoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado com o ID: " + id));
 
-        // em vez de deletar, inativa
+        // executa a exclusao logica ou seja ativo = false
         produto.setAtivo(false);
         produtoRepository.save(produto);
     }
