@@ -30,7 +30,7 @@ public class DataLoader implements CommandLineRunner {
             pessoa.setNome("Administrador Base");
             pessoa.setEmail("admin@admin.admin");
             pessoa.setCpfCnpj("00000000000");
-            pessoa.setTipo(TipoPessoa.Funcionario);
+            pessoa.setTipo(TipoPessoa.Gerente);
 
             Usuario admin = Usuario.builder()
                     .login("admin@admin.admin")
